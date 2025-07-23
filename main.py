@@ -10,8 +10,7 @@ st.set_page_config(page_title="📊 MF Portfolio", layout="wide")
 
 CSV_FILE = "portfolio.csv"
 
-st.markdown("<h1 style='text-align:center;'>📊 Mutual Fund Portfolio Tracker</h1>", unsafe_allow_html=True)
-
+st.title("Mutual Fund Portfolio Tracker")
 # ---------------- Fetch AMFI Fund List ----------------
 @st.cache_data(ttl=86400)
 def get_all_funds():
