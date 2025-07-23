@@ -45,6 +45,21 @@ def save_to_csv(new_entry):
         df = pd.DataFrame([new_entry])
     df.to_csv(CSV_FILE, index=False)
 
+# --- Load from CSV ---
+def load_portfolio():
+    if os.path.exists(CSV_FILE):
+        return pd.read_csv(CSV_FILE)
+    return pd.DataFrame(columns=["Date", "Fund", "AMFI Code", "NAV", "Units", "Amount"])
+
+# --- Save to CSV ---
+def save_to_csv(new_entry):
+    if os.path.exists(CSV_FILE):
+        df = pd.read_csv(CSV_FILE)
+        df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
+    else:
+        df = pd.DataFrame([new_entry])
+    df.to_csv(CSV_FILE, index=False)
+
 # --- Handle Form Submission ---
 if submit:
     fund_name = selected_fund[0]
