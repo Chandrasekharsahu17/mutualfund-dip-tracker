@@ -24,17 +24,19 @@ def get_all_funds():
             parts = line.split(";")
             code, name = parts[0], parts[3]
             if name and code:
-                fund_list.append((f"{name} ({code})", code))
+                fund_list.append((name, code))
     return sorted(fund_list)
 
 fund_choices = get_all_funds()
 
-# --- Investment Form (Simplified) ---
-st.markdown("### ➕ Add Investment")
-with st.form("mf_form"):
-    selected_fund = st.selectbox("Select Mutual Fund", fund_choices, index=0)
-    units = st.number_input("Units Purchased", min_value=0.0001, step=0.01, format="%.4f")
-    submit = st.form_submit_button("Add")
+# --- Fetch Latest NAV for a fund ---
+def fetch_latest_nav(code):
+    try:
+        url = f"https://api.mfapi.in/mf/{code}"
+        r = requests.get(url).json()
+        return float(r['data'][0]['nav'].replace(",", ""))
+    except:
+        return None
 
 # --- Save to CSV ---
 def save_to_csv(new_entry):
@@ -51,19 +53,16 @@ def load_portfolio():
         return pd.read_csv(CSV_FILE)
     return pd.DataFrame(columns=["Date", "Fund", "AMFI Code", "NAV", "Units", "Amount"])
 
-# --- Save to CSV ---
-def save_to_csv(new_entry):
-    if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE)
-        df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
-    else:
-        df = pd.DataFrame([new_entry])
-    df.to_csv(CSV_FILE, index=False)
+# --- Investment Form (Simplified) ---
+st.markdown("### ➕ Add Investment")
+with st.form("mf_form"):
+    selected_fund = st.selectbox("Select Mutual Fund", fund_choices, index=0)
+    units = st.number_input("Units Purchased", min_value=0.0001, step=0.01, format="%.4f")
+    submit = st.form_submit_button("Add")
 
 # --- Handle Form Submission ---
 if submit:
-    fund_name = selected_fund[0]
-    amfi_code = selected_fund[1]
+    fund_name, amfi_code = selected_fund
     nav = fetch_latest_nav(amfi_code)
     if nav:
         amount = round(nav * units, 2)
@@ -80,21 +79,12 @@ if submit:
     else:
         st.error("❌ Couldn't fetch NAV. Try again.")
 
-# --- Load and Display Investments ---
+# --- Load and Display Portfolio ---
 df = load_portfolio()
 
 if not df.empty:
     st.markdown("---")
     st.markdown("### 💼 Your Portfolio")
-
-    # Fetch Latest NAVs
-    def fetch_latest_nav(code):
-        try:
-            url = f"https://api.mfapi.in/mf/{code}"
-            r = requests.get(url).json()
-            return float(r['data'][0]['nav'].replace(",", ""))
-        except:
-            return None
 
     df["Latest NAV"] = df["AMFI Code"].apply(fetch_latest_nav)
     df["Current Value"] = (df["Latest NAV"] * df["Units"]).round(2)
@@ -104,7 +94,7 @@ if not df.empty:
     st.markdown("### 📋 Portfolio Details")
     st.dataframe(df)
 
-    # Add delete options below table
+    # Add delete options
     st.markdown("### 🗑️ Remove an Entry")
     for idx, row in df.iterrows():
         col1, col2 = st.columns([6, 1])
@@ -117,7 +107,7 @@ if not df.empty:
                 st.success("✅ Entry deleted!")
                 st.experimental_rerun()
 
-    # Totals & Summary
+    # Summary metrics
     total_invested = df["Amount"].sum()
     total_current = df["Current Value"].sum()
     total_gain = df["Gain/Loss"].sum()
