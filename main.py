@@ -69,14 +69,13 @@ if submit:
     save_to_csv(new_entry)
     st.success(f"✅ Saved: {units:.4f} units of {fund_name} @ ₹{nav} (₹{amount})")
 # --- Load and Display Investments ---
-# --- Load and Display Investments ---
 df = load_portfolio()
 
 if not df.empty:
     st.markdown("---")
     st.markdown("### 💼 Your Portfolio")
 
-    # Fetch Latest NAV
+    # Fetch Latest NAVs
     def fetch_latest_nav(code):
         try:
             url = f"https://api.mfapi.in/mf/{code}"
@@ -89,12 +88,16 @@ if not df.empty:
     df["Current Value"] = (df["Latest NAV"] * df["Units"]).round(2)
     df["Gain/Loss"] = (df["Current Value"] - df["Amount"]).round(2)
 
-    # Add Delete buttons
-    st.markdown("### 🗑️ Remove Any Entry")
+    # Show full data table
+    st.markdown("### 📋 Portfolio Details")
+    st.dataframe(df)
+
+    # Add delete options below table
+    st.markdown("### 🗑️ Remove an Entry")
     for idx, row in df.iterrows():
         col1, col2 = st.columns([6, 1])
         with col1:
-            st.write(f"📅 {row['Date']} | {row['Fund']} | ₹{row['Amount']} | Units: {row['Units']}")
+            st.write(f"{row['Date']} | {row['Fund']} | Units: {row['Units']} | ₹{row['Amount']}")
         with col2:
             if st.button("Delete", key=f"del_{idx}"):
                 df = df.drop(index=idx).reset_index(drop=True)
@@ -102,7 +105,7 @@ if not df.empty:
                 st.success("✅ Entry deleted!")
                 st.experimental_rerun()
 
-    # Recalculate totals after possible deletion
+    # Totals & Summary
     total_invested = df["Amount"].sum()
     total_current = df["Current Value"].sum()
     total_gain = df["Gain/Loss"].sum()
