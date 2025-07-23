@@ -29,14 +29,12 @@ def get_all_funds():
 
 fund_choices = get_all_funds()
 
-# --- Investment Form ---
-st.markdown("### 🧾 Add New Investment")
+# --- Investment Form (Simplified) ---
+st.markdown("### ➕ Add Investment")
 with st.form("mf_form"):
     selected_fund = st.selectbox("Select Mutual Fund", fund_choices, index=0)
-    inv_date = st.date_input("Investment Date", datetime.today())
-    nav = st.number_input("NAV (at the time of purchase)", min_value=1.0, step=0.1)
     units = st.number_input("Units Purchased", min_value=0.0001, step=0.01, format="%.4f")
-    submit = st.form_submit_button("➕ Add Investment")
+    submit = st.form_submit_button("Add")
 
 # --- Save to CSV ---
 def save_to_csv(new_entry):
@@ -47,27 +45,26 @@ def save_to_csv(new_entry):
         df = pd.DataFrame([new_entry])
     df.to_csv(CSV_FILE, index=False)
 
-# --- Load from CSV ---
-def load_portfolio():
-    if os.path.exists(CSV_FILE):
-        return pd.read_csv(CSV_FILE)
-    return pd.DataFrame(columns=["Date", "Fund", "AMFI Code", "NAV", "Units", "Amount"])
-
 # --- Handle Form Submission ---
 if submit:
     fund_name = selected_fund[0]
     amfi_code = selected_fund[1]
-    amount = round(nav * units, 2)
-    new_entry = {
-        "Date": inv_date.strftime("%Y-%m-%d"),
-        "Fund": fund_name.strip(),
-        "AMFI Code": amfi_code,
-        "NAV": nav,
-        "Units": round(units, 4),
-        "Amount": amount
-    }
-    save_to_csv(new_entry)
-    st.success(f"✅ Saved: {units:.4f} units of {fund_name} @ ₹{nav} (₹{amount})")
+    nav = fetch_latest_nav(amfi_code)
+    if nav:
+        amount = round(nav * units, 2)
+        new_entry = {
+            "Date": datetime.today().strftime("%Y-%m-%d"),
+            "Fund": fund_name,
+            "AMFI Code": amfi_code,
+            "NAV": nav,
+            "Units": round(units, 4),
+            "Amount": amount
+        }
+        save_to_csv(new_entry)
+        st.success(f"✅ Added {units:.4f} units of {fund_name} @ ₹{nav}")
+    else:
+        st.error("❌ Couldn't fetch NAV. Try again.")
+
 # --- Load and Display Investments ---
 df = load_portfolio()
 
