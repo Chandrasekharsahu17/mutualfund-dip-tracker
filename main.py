@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 from datetime import datetime
 import os
+import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Mutual Fund Tracker", layout="centered")
 CSV_FILE = "portfolio.csv"
@@ -93,6 +95,29 @@ if not df.empty:
     st.markdown("## 📈 Summary")
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Invested", f"₹{total_inv:,.2f}")
+    # --- Pie Chart: Fund Allocation by Current Value ---
+st.markdown("## 🥧 Allocation by Fund (Current Value)")
+fig_pie = px.pie(
+    df,
+    names="Fund",
+    values="Current Value",
+    title="Portfolio Allocation",
+    hole=0.4
+)
+st.plotly_chart(fig_pie, use_container_width=True)
+
+# --- Bar Chart: Profit/Loss by Fund ---
+st.markdown("## 📊 Profit / Loss by Fund")
+fig_bar = px.bar(
+    df,
+    x="Fund",
+    y="P/L",
+    color="P/L",
+    title="Profit & Loss Overview",
+    color_continuous_scale="Tealrose"
+)
+st.plotly_chart(fig_bar, use_container_width=True)
+
     col2.metric("Current Value", f"₹{total_val:,.2f}", delta=f"₹{gain:,.2f}")
     col3.metric("Net Gain/Loss", f"₹{gain:,.2f}", delta=f"{(gain/total_inv)*100:.2f}%" if total_inv > 0 else "0.00%")
 else:
@@ -115,3 +140,40 @@ try:
     st.metric("📊 Signal", "✅ BUY" if dip >= 5 else "⏳ WAIT", delta=f"{dip}%", delta_color="inverse")
 except:
     st.warning("⚠️ Could not fetch Nifty data.")
+# --- NAV History Trend Chart ---
+st.markdown("## 📈 NAV Trend (Past 30 Days)")
+
+# Show dropdown of only funds in portfolio
+funds_in_portfolio = df["Fund"].unique().tolist()
+selected_nav_fund = st.selectbox("Select a fund to view NAV trend", funds_in_portfolio)
+
+# Get AMFI Code for the selected fund
+selected_code = df[df["Fund"] == selected_nav_fund]["AMFI Code"].iloc[0]
+
+# Fetch last 30 NAVs
+def fetch_nav_history(amfi_code):
+    try:
+        url = f"https://api.mfapi.in/mf/{amfi_code}"
+        r = requests.get(url).json()
+        data = r['data'][:30]  # Last 30 days
+        nav_df = pd.DataFrame(data)
+        nav_df['nav'] = nav_df['nav'].astype(float)
+        nav_df['date'] = pd.to_datetime(nav_df['date'])
+        return nav_df.sort_values("date")
+    except:
+        return pd.DataFrame()
+
+nav_history = fetch_nav_history(selected_code)
+
+# Plot line chart
+if not nav_history.empty:
+    fig_line = px.line(
+        nav_history,
+        x="date",
+        y="nav",
+        title=f"NAV Trend: {selected_nav_fund}",
+        markers=True
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+else:
+    st.warning("Could not fetch NAV history.")
