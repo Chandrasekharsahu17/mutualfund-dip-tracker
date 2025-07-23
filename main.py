@@ -116,12 +116,13 @@ if not df.empty:
     st.markdown("---")
     st.markdown("### 📈 Summary")
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Invested", f"₹{total_amt:,.2f}")
+        col1.metric("Total Invested", f"₹{total_amt:,.2f}")
     col2.metric("Current Value", f"₹{total_val:,.2f}", delta=f"₹{gain:,.2f}")
     if total_amt > 0:
-        col3.metric("Net Gain/Loss", f"₹{gain:,.2f}", delta=f"{(gain/total_amt)*100:.2f}%")
+        col3.metric("Net Gain/Loss", f"₹{gain:,.2f}", delta=f"{(gain / total_amt) * 100:.2f}%")
     else:
         col3.metric("Net Gain/Loss", "₹0.00")
+
 
     # --- Pie Chart ---
     st.markdown("## 🥧 Allocation by Fund")
