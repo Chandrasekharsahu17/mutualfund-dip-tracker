@@ -1,0 +1,9 @@
+run = "streamlit run main.py --server.port 3000"
+modules = ["python-3.11"]
+
+[nix]
+packages = ["glibcLocales"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80
