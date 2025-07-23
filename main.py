@@ -19,6 +19,74 @@ mf_codes = {
 # Title
 st.title("📊 Mutual Fund Portfolio & Dip Strategy Tracker")
 
+import streamlit as st
+import requests
+import pandas as pd
+from datetime import datetime
+
+# --- AMFI NAV Fetch ---
+@st.cache_data(ttl=86400)  # cache NAV for 1 day
+def get_latest_nav(amfi_code):
+    url = f'https://www.amfiindia.com/spages/NAVAll.txt'
+    r = requests.get(url)
+    for line in r.text.splitlines():
+        if line.startswith(str(amfi_code)):
+            parts = line.split(";")
+            try:
+                nav = float(parts[-1])
+                return nav
+            except:
+                return None
+    return None
+
+# --- Investment Form ---
+st.markdown("## 📥 Add New Investment")
+
+with st.form("investment_form"):
+    inv_date = st.date_input("Investment Date", datetime.today())
+    amount = st.number_input("Amount Invested (₹)", min_value=1.0, step=1000.0)
+    amfi_code = st.text_input("AMFI Code (e.g. 120503 for UTI Nifty 50)")
+    submit = st.form_submit_button("Add Investment")
+
+# --- Session storage (temporary) ---
+if "investments" not in st.session_state:
+    st.session_state.investments = []
+
+# --- Process form ---
+if submit and amfi_code:
+    nav = get_latest_nav(amfi_code)
+    if nav:
+        units = round(amount / nav, 4)
+        st.session_state.investments.append({
+            "Date": inv_date.strftime("%Y-%m-%d"),
+            "AMFI Code": amfi_code,
+            "Amount": amount,
+            "NAV": nav,
+            "Units": units
+        })
+        st.success(f"✅ Added investment: ₹{amount} at NAV {nav}")
+    else:
+        st.error("❌ Could not fetch NAV. Please check AMFI code.")
+
+# --- Display Investments ---
+if st.session_state.investments:
+    st.markdown("### 💼 Your Investments")
+    df = pd.DataFrame(st.session_state.investments)
+    
+    # Fetch latest NAVs and compute current value
+    df["Latest NAV"] = df["AMFI Code"].apply(get_latest_nav)
+    df["Current Value"] = (df["Units"] * df["Latest NAV"]).round(2)
+    df["Gain/Loss"] = (df["Current Value"] - df["Amount"]).round(2)
+
+    st.dataframe(df)
+
+    total_invested = df["Amount"].sum()
+    total_current = df["Current Value"].sum()
+    st.markdown(f"**📊 Total Invested**: ₹{total_invested:,.2f}")
+    st.markdown(f"**💹 Current Value**: ₹{total_current:,.2f}")
+    st.markdown(f"**📈 Net Gain/Loss**: ₹{(total_current - total_invested):,.2f}")
+
+
 # Fetch Nifty
 nifty = yf.Ticker("^NSEI").history(period="60d")['Close']
 latest = nifty.iloc[-1]
