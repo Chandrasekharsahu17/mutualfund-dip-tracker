@@ -3,12 +3,10 @@ import pandas as pd
 import yfinance as yf
 import requests
 import datetime
+from datetime import datetime as dt
 
 # Configurations
 liquid_fund = 600000
-sip_amt = 50000
-sip_start = datetime.date(2024, 7, 1)
-sip_months = 18
 
 mf_codes = {
     "ICICI Balanced Advantage": "INF109K01VX3",
@@ -18,11 +16,6 @@ mf_codes = {
 
 # Title
 st.title("📊 Mutual Fund Portfolio & Dip Strategy Tracker")
-
-import streamlit as st
-import requests
-import pandas as pd
-from datetime import datetime
 
 # --- AMFI NAV Fetch ---
 @st.cache_data(ttl=86400)  # cache NAV for 1 day
@@ -43,7 +36,7 @@ def get_latest_nav(amfi_code):
 st.markdown("## 📥 Add New Investment")
 
 with st.form("investment_form"):
-    inv_date = st.date_input("Investment Date", datetime.today())
+    inv_date = st.date_input("Investment Date", datetime.date.today())
     amount = st.number_input("Amount Invested (₹)", min_value=1.0, step=1000.0)
     amfi_code = st.text_input("AMFI Code (e.g. 120503 for UTI Nifty 50)")
     submit = st.form_submit_button("Add Investment")
@@ -72,7 +65,7 @@ if submit and amfi_code:
 if st.session_state.investments:
     st.markdown("### 💼 Your Investments")
     df = pd.DataFrame(st.session_state.investments)
-    
+
     # Fetch latest NAVs and compute current value
     df["Latest NAV"] = df["AMFI Code"].apply(get_latest_nav)
     df["Current Value"] = (df["Units"] * df["Latest NAV"]).round(2)
@@ -86,12 +79,11 @@ if st.session_state.investments:
     st.markdown(f"**💹 Current Value**: ₹{total_current:,.2f}")
     st.markdown(f"**📈 Net Gain/Loss**: ₹{(total_current - total_invested):,.2f}")
 
-
-# Fetch Nifty
+# --- Nifty Dip Strategy ---
 nifty = yf.Ticker("^NSEI").history(period="60d")['Close']
 latest = nifty.iloc[-1]
 peak = nifty[-30:].max()
-dip = round((peak - latest)/peak * 100, 2)
+dip = round((peak - latest) / peak * 100, 2)
 
 st.subheader("🔍 Nifty Watch")
 st.write(f"Latest: ₹{latest:.2f}")
@@ -99,23 +91,13 @@ st.write(f"30-day Peak: ₹{peak:.2f}")
 st.write(f"Dip: {dip}%")
 st.metric("Dip Alert", "BUY" if dip >= 5 else "WAIT", delta=f"{dip}%")
 
-# SIP Progress
-st.subheader("📆 SIP Tracker")
-months_done = min((datetime.date.today().year - sip_start.year)*12 + datetime.date.today().month - sip_start.month, sip_months)
-sip_invested = months_done * sip_amt
-st.write(f"{months_done} of {sip_months} months completed")
-st.write(f"SIP Invested: ₹{sip_invested:,}")
-
 # Liquid Fund Logic
 dip_trigger = dip >= 5
-if dip_trigger:
-    invest_amt = 100000
-else:
-    invest_amt = 0
+invest_amt = 100000 if dip_trigger else 0
 remaining_liquid = liquid_fund - invest_amt
 st.write(f"Liquid Fund Available: ₹{remaining_liquid:,}")
 
-# Fetch NAVs
+# --- Mutual Fund NAV Section ---
 st.subheader("💡 Mutual Fund NAVs & Portfolio")
 total_value = 0
 data = []
@@ -123,9 +105,9 @@ for fund, code in mf_codes.items():
     try:
         resp = requests.get(f"https://api.mfapi.in/mf/{code}")
         nav = float(resp.json()["data"][0]["nav"].replace(",", ""))
-        units = sip_invested / nav
+        units = 0
         value = units * nav
-        gain = value - sip_invested
+        gain = value
         data.append([fund, nav, units, value, gain])
         total_value += value
     except:
@@ -135,7 +117,4 @@ df = pd.DataFrame(data, columns=["Fund", "NAV", "Units", "Value", "Gain"])
 st.table(df)
 
 st.subheader("📈 Summary")
-st.write(f"Total Invested (SIP): ₹{sip_invested:,}")
 st.write(f"Total Portfolio Value: ₹{total_value:,.2f}")
-st.write(f"Unrealized Gain/Loss: ₹{total_value - sip_invested:,.2f}")
-
