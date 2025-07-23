@@ -23,6 +23,26 @@ def get_all_funds():
     return sorted(fund_list)
 
 fund_choices = get_all_funds()
+import yfinance as yf
+
+st.markdown("---")
+st.markdown("### 📉 Nifty 50 Dip Strategy")
+
+# Fetch last 60 days Nifty close data
+try:
+    nifty = yf.Ticker("^NSEI").history(period="60d")['Close']
+    latest = nifty.iloc[-1]
+    peak = nifty[-30:].max()
+    dip = round((peak - latest)/peak * 100, 2)
+
+    st.write(f"📍 Latest Nifty: ₹{latest:.2f}")
+    st.write(f"📈 30-day Peak: ₹{peak:.2f}")
+    st.write(f"🔻 Dip from Peak: {dip}%")
+
+    signal = "✅ BUY" if dip >= 5 else "⏳ WAIT"
+    st.metric("📊 Signal", signal, delta=f"{dip}%", delta_color="inverse")
+except Exception as e:
+    st.error("❌ Could not fetch Nifty data.")
 
 # --- Investment Form ---
 st.markdown("### 🧾 Add New Investment")
