@@ -55,8 +55,9 @@ def load_portfolio():
 
 # --- Handle Form Submission ---
 if submit:
-    fund_name, amfi_code = selected_fund.split(" (")
-    amfi_code = amfi_code.rstrip(")")
+fund_name = selected_fund[0]
+amfi_code = selected_fund[1]
+
     amount = round(nav * units, 2)
     new_entry = {
         "Date": inv_date.strftime("%Y-%m-%d"),
