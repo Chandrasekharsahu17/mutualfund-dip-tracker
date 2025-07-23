@@ -55,9 +55,8 @@ def load_portfolio():
 
 # --- Handle Form Submission ---
 if submit:
-fund_name = selected_fund[0]
-amfi_code = selected_fund[1]
-
+    fund_name = selected_fund[0]
+    amfi_code = selected_fund[1]
     amount = round(nav * units, 2)
     new_entry = {
         "Date": inv_date.strftime("%Y-%m-%d"),
@@ -69,7 +68,6 @@ amfi_code = selected_fund[1]
     }
     save_to_csv(new_entry)
     st.success(f"✅ Saved: {units:.4f} units of {fund_name} @ ₹{nav} (₹{amount})")
-
 # --- Load and Display Investments ---
 df = load_portfolio()
 
