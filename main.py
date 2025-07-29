@@ -10,7 +10,7 @@ import os
 st.set_page_config(page_title="📊 MF Portfolio", layout="wide")
 CSV_FILE = "portfolio.csv"
 
-# -------------------- HEADER --------------------
+# -------------------- STYLE --------------------
 st.markdown("""
     <style>
         .main-title {
@@ -39,16 +39,16 @@ def get_all_funds():
     url = "https://www.amfiindia.com/spages/NAVAll.txt"
     try:
         r = requests.get(url, timeout=10)
-        fund_list = []
+        fund_dict = {}
         for line in r.text.splitlines():
             if ";" in line and line[0].isdigit():
                 parts = line.split(";")
                 code, name = parts[0], parts[3]
                 if code and name:
-                    fund_list.append((f"{name} ({code})", code))
-        return sorted(fund_list)
+                    fund_dict[f"{name} ({code})"] = code
+        return dict(sorted(fund_dict.items()))
     except:
-        return []
+        return {}
 
 @st.cache_data(ttl=3600)
 def fetch_nav(code):
@@ -67,37 +67,32 @@ def load_portfolio():
 def save_portfolio(df):
     df.to_csv(CSV_FILE, index=False)
 
+# -------------------- DATA --------------------
 fund_choices = get_all_funds()
+fund_display_names = list(fund_choices.keys())
 
 # -------------------- SIDEBAR: ADD INVESTMENT --------------------
 st.sidebar.header("➕ Add Investment")
 with st.sidebar.form("add_form", clear_on_submit=True):
-    fund_sel = st.selectbox("Select Mutual Fund", fund_choices)
+    fund_sel = st.selectbox("Select Mutual Fund", fund_display_names)
+    amfi_code = fund_choices.get(fund_sel, "")
+    fund_name = fund_sel.split(" (")[0]
 
-    # Unpack tuple
-    fund_display, amfi_code = fund_sel
-    fund_name = fund_display.split(" (")[0]  # Clean name
-    
-    # Fetch NAV
     latest_nav = fetch_nav(amfi_code)
     if latest_nav:
         st.sidebar.write(f"📌 Latest NAV: ₹{latest_nav}")
     else:
         st.sidebar.warning("⚠️ NAV not available.")
 
-    # Units & Calculation
     units = st.number_input("Units", min_value=0.01, step=0.01)
     invested_amt = round(units * latest_nav, 2) if latest_nav else 0
     st.sidebar.write(f"💰 Investment Value: ₹{invested_amt:,.2f}")
 
-    # Date & Type
     buy_date = st.date_input("Purchase Date", datetime.today())
     inv_type = st.selectbox("Investment Type", ["Lump Sum", "SIP"])
 
-    # ✅ Submit button
     submit = st.form_submit_button("Add Fund")
 
-# ✅ Form submission logic
 if submit:
     if latest_nav and units > 0:
         df = load_portfolio()
@@ -117,8 +112,7 @@ if submit:
     else:
         st.sidebar.error("❌ Please check NAV or Units.")
 
-
-# -------------------- LOAD PORTFOLIO --------------------
+# -------------------- PORTFOLIO --------------------
 df = load_portfolio()
 
 if not df.empty:
@@ -126,7 +120,7 @@ if not df.empty:
     df["Current Value"] = (df["Latest NAV"] * df["Units"]).round(2)
     df["Gain/Loss"] = (df["Current Value"] - df["Amount"]).round(2)
 
-    # -------------------- SUMMARY CARDS --------------------
+    # -------------------- SUMMARY --------------------
     total_amt = df["Amount"].sum()
     total_val = df["Current Value"].sum()
     gain = total_val - total_amt
@@ -139,13 +133,14 @@ if not df.empty:
     else:
         col3.metric("📊 Gain/Loss %", "0%")
 
-    # -------------------- PORTFOLIO TABLE --------------------
+    # -------------------- TABLE --------------------
     st.markdown('<p class="section-header">📋 Portfolio</p>', unsafe_allow_html=True)
     st.dataframe(df, use_container_width=True)
 
-    # -------------------- DELETE ENTRY --------------------
+    # -------------------- DELETE --------------------
     st.markdown('<p class="section-header">🗑️ Remove Fund</p>', unsafe_allow_html=True)
-    remove_index = st.selectbox("Select Entry to Delete", options=df.index, format_func=lambda x: f"{df.iloc[x]['Fund']} ({df.iloc[x]['Units']} units)")
+    remove_index = st.selectbox("Select Entry to Delete", options=df.index,
+                                format_func=lambda x: f"{df.iloc[x]['Fund']} ({df.iloc[x]['Units']} units)")
     if st.button("Delete Selected"):
         df = df.drop(index=remove_index).reset_index(drop=True)
         save_portfolio(df)
@@ -161,7 +156,7 @@ if not df.empty:
     bar = px.bar(df, x="Fund", y="Gain/Loss", color="Gain/Loss", text="Gain/Loss", title="Fund-wise Profit / Loss")
     st.plotly_chart(bar, use_container_width=True)
 
-# -------------------- NIFTY STRATEGY --------------------
+# -------------------- NIFTY DIP STRATEGY --------------------
 st.markdown('<p class="section-header">📉 Nifty 50 Dip Strategy</p>', unsafe_allow_html=True)
 try:
     nifty = yf.Ticker("^NSEI").history(period="60d")['Close']
