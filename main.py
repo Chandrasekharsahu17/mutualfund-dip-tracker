@@ -10,9 +10,29 @@ import os
 st.set_page_config(page_title="📊 MF Portfolio", layout="wide")
 CSV_FILE = "portfolio.csv"
 
-st.title("📊 Mutual Fund Portfolio Tracker")
+# -------------------- HEADER --------------------
+st.markdown("""
+    <style>
+        .main-title {
+            font-size:36px !important;
+            font-weight:700;
+            color:#2E86C1;
+            text-align:center;
+            margin-bottom:10px;
+        }
+        .section-header {
+            font-size:22px !important;
+            color:#154360;
+            font-weight:600;
+            margin-top:30px;
+            margin-bottom:10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-# -------------------- Fetch AMFI Fund List --------------------
+st.markdown('<p class="main-title">📊 Mutual Fund Portfolio Tracker</p>', unsafe_allow_html=True)
+
+# -------------------- FUNCTIONS --------------------
 @st.cache_data(ttl=86400)
 def get_all_funds():
     """Fetch all mutual funds from AMFI website"""
@@ -30,11 +50,6 @@ def get_all_funds():
     except:
         return []
 
-fund_choices = get_all_funds()
-if not fund_choices:
-    st.error("⚠️ Could not fetch fund list from AMFI. Please check your internet connection.")
-
-# -------------------- Fetch Latest NAV --------------------
 @st.cache_data(ttl=3600)
 def fetch_nav(code):
     """Fetch latest NAV from mfapi.in"""
@@ -44,62 +59,58 @@ def fetch_nav(code):
     except:
         return None
 
-# -------------------- Load & Save Portfolio --------------------
 def load_portfolio():
     if os.path.exists(CSV_FILE):
         return pd.read_csv(CSV_FILE)
-    return pd.DataFrame(columns=["Date", "Fund", "AMFI Code", "Units", "NAV", "Amount"])
+    return pd.DataFrame(columns=["Date", "Fund", "AMFI Code", "Units", "NAV", "Amount", "Type"])
 
 def save_portfolio(df):
     df.to_csv(CSV_FILE, index=False)
 
-# -------------------- Improved Add Investment Section --------------------
-st.sidebar.header("➕ Add Investment")
+fund_choices = get_all_funds()
 
+# -------------------- SIDEBAR: ADD INVESTMENT --------------------
+st.sidebar.header("➕ Add Investment")
 with st.sidebar.form("add_form", clear_on_submit=True):
-    # Searchable dropdown
     fund_sel = st.selectbox("Select Mutual Fund", fund_choices)
     fund_name = fund_sel.split(" (")[0]
     amfi_code = fund_sel.split(" (")[1].strip(")")
 
-    # Fetch NAV instantly when fund changes
     latest_nav = fetch_nav(amfi_code)
     if latest_nav:
-        st.write(f"📌 Latest NAV: ₹{latest_nav}")
+        st.sidebar.write(f"📌 Latest NAV: ₹{latest_nav}")
     else:
-        st.warning("⚠️ Could not fetch NAV. Check internet connection.")
+        st.sidebar.warning("⚠️ NAV not available.")
 
-    # Units and Auto Calculation
-    units = st.number_input("Units Bought", min_value=0.0001, step=0.01)
-    invested_amt = (units * latest_nav) if latest_nav else 0
-    st.write(f"💰 Estimated Investment Amount: ₹{invested_amt:,.2f}")
+    units = st.number_input("Units", min_value=0.01, step=0.01)
+    invested_amt = round(units * latest_nav, 2) if latest_nav else 0
+    st.sidebar.write(f"💰 Investment Value: ₹{invested_amt:,.2f}")
 
-    # Date & Type
     buy_date = st.date_input("Purchase Date", datetime.today())
     inv_type = st.selectbox("Investment Type", ["Lump Sum", "SIP"])
 
-    submit = st.form_submit_button("➕ Add to Portfolio")
+    submit = st.form_submit_button("Add Fund")
 
 if submit:
     if latest_nav and units > 0:
+        df = load_portfolio()
         new_entry = {
             "Date": buy_date.strftime("%Y-%m-%d"),
             "Fund": fund_name,
             "AMFI Code": amfi_code,
             "Units": round(units, 4),
             "NAV": latest_nav,
-            "Amount": round(invested_amt, 2),
+            "Amount": invested_amt,
             "Type": inv_type
         }
-        df = load_portfolio()
         df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
         save_portfolio(df)
-        st.success(f"✅ Added {units:.4f} units of {fund_name} @ ₹{latest_nav} ({inv_type})")
+        st.sidebar.success(f"✅ Added {fund_name}")
         st.experimental_rerun()
     else:
-        st.error("❌ Please enter valid Units & ensure NAV is fetched.")
+        st.sidebar.error("❌ Please check NAV or Units.")
 
-# -------------------- Show Portfolio --------------------
+# -------------------- LOAD PORTFOLIO --------------------
 df = load_portfolio()
 
 if not df.empty:
@@ -107,42 +118,43 @@ if not df.empty:
     df["Current Value"] = (df["Latest NAV"] * df["Units"]).round(2)
     df["Gain/Loss"] = (df["Current Value"] - df["Amount"]).round(2)
 
-    st.subheader("📋 Portfolio Table")
-    st.dataframe(df, use_container_width=True)
-
-    # ---------------- Delete Entry ----------------
-    st.subheader("🗑️ Remove an Entry")
-    remove_index = st.selectbox("Select Entry to Delete", options=df.index, format_func=lambda x: f"{df.iloc[x]['Fund']} ({df.iloc[x]['Units']} units)")
-    if st.button("Delete Selected Entry"):
-        df = df.drop(index=remove_index).reset_index(drop=True)
-        save_portfolio(df)
-        st.success("✅ Entry removed")
-        st.experimental_rerun()
-
-    # ---------------- Portfolio Summary ----------------
-    st.subheader("📈 Summary")
+    # -------------------- SUMMARY CARDS --------------------
     total_amt = df["Amount"].sum()
     total_val = df["Current Value"].sum()
     gain = total_val - total_amt
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Invested", f"₹{total_amt:,.2f}")
-    col2.metric("Current Value", f"₹{total_val:,.2f}", delta=f"₹{gain:,.2f}")
-    if total_amt > 0:
-        col3.metric("Net Gain/Loss", f"₹{gain:,.2f}", delta=f"{(gain/total_amt)*100:.2f}%")
-    else:
-        col3.metric("Net Gain/Loss", "₹0.00")
 
-    # ---------------- Charts ----------------
-    st.subheader("🥧 Allocation by Fund")
-    pie = px.pie(df, names="Fund", values="Current Value", title="Fund Allocation")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("💵 Total Invested", f"₹{total_amt:,.2f}")
+    col2.metric("📈 Current Value", f"₹{total_val:,.2f}", delta=f"₹{gain:,.2f}")
+    if total_amt > 0:
+        col3.metric("📊 Gain/Loss %", f"{(gain/total_amt)*100:.2f}%", delta=f"{gain:,.2f}")
+    else:
+        col3.metric("📊 Gain/Loss %", "0%")
+
+    # -------------------- PORTFOLIO TABLE --------------------
+    st.markdown('<p class="section-header">📋 Portfolio</p>', unsafe_allow_html=True)
+    st.dataframe(df, use_container_width=True)
+
+    # -------------------- DELETE ENTRY --------------------
+    st.markdown('<p class="section-header">🗑️ Remove Fund</p>', unsafe_allow_html=True)
+    remove_index = st.selectbox("Select Entry to Delete", options=df.index, format_func=lambda x: f"{df.iloc[x]['Fund']} ({df.iloc[x]['Units']} units)")
+    if st.button("Delete Selected"):
+        df = df.drop(index=remove_index).reset_index(drop=True)
+        save_portfolio(df)
+        st.success("✅ Entry removed.")
+        st.experimental_rerun()
+
+    # -------------------- CHARTS --------------------
+    st.markdown('<p class="section-header">🥧 Fund Allocation</p>', unsafe_allow_html=True)
+    pie = px.pie(df, names="Fund", values="Current Value", title="Fund Allocation by Value")
     st.plotly_chart(pie, use_container_width=True)
 
-    st.subheader("📊 Profit / Loss by Fund")
-    bar = px.bar(df, x="Fund", y="Gain/Loss", color="Gain/Loss", text="Gain/Loss")
+    st.markdown('<p class="section-header">📊 Profit / Loss</p>', unsafe_allow_html=True)
+    bar = px.bar(df, x="Fund", y="Gain/Loss", color="Gain/Loss", text="Gain/Loss", title="Fund-wise Profit / Loss")
     st.plotly_chart(bar, use_container_width=True)
 
-# -------------------- Nifty Dip Strategy --------------------
-st.subheader("📉 Nifty 50 Dip Strategy")
+# -------------------- NIFTY STRATEGY --------------------
+st.markdown('<p class="section-header">📉 Nifty 50 Dip Strategy</p>', unsafe_allow_html=True)
 try:
     nifty = yf.Ticker("^NSEI").history(period="60d")['Close']
     latest = nifty.iloc[-1]
