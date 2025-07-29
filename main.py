@@ -73,24 +73,31 @@ fund_choices = get_all_funds()
 st.sidebar.header("➕ Add Investment")
 with st.sidebar.form("add_form", clear_on_submit=True):
     fund_sel = st.selectbox("Select Mutual Fund", fund_choices)
-    fund_name = fund_sel.split(" (")[0]
-    amfi_code = fund_sel.split(" (")[1].strip(")")
 
+    # Unpack tuple
+    fund_display, amfi_code = fund_sel
+    fund_name = fund_display.split(" (")[0]  # Clean name
+    
+    # Fetch NAV
     latest_nav = fetch_nav(amfi_code)
     if latest_nav:
         st.sidebar.write(f"📌 Latest NAV: ₹{latest_nav}")
     else:
         st.sidebar.warning("⚠️ NAV not available.")
 
+    # Units & Calculation
     units = st.number_input("Units", min_value=0.01, step=0.01)
     invested_amt = round(units * latest_nav, 2) if latest_nav else 0
     st.sidebar.write(f"💰 Investment Value: ₹{invested_amt:,.2f}")
 
+    # Date & Type
     buy_date = st.date_input("Purchase Date", datetime.today())
     inv_type = st.selectbox("Investment Type", ["Lump Sum", "SIP"])
 
+    # ✅ Submit button
     submit = st.form_submit_button("Add Fund")
 
+# ✅ Form submission logic
 if submit:
     if latest_nav and units > 0:
         df = load_portfolio()
@@ -109,6 +116,7 @@ if submit:
         st.experimental_rerun()
     else:
         st.sidebar.error("❌ Please check NAV or Units.")
+
 
 # -------------------- LOAD PORTFOLIO --------------------
 df = load_portfolio()
