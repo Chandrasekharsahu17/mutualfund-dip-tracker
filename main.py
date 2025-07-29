@@ -53,34 +53,51 @@ def load_portfolio():
 def save_portfolio(df):
     df.to_csv(CSV_FILE, index=False)
 
-# -------------------- Add Investment --------------------
+# -------------------- Improved Add Investment Section --------------------
 st.sidebar.header("➕ Add Investment")
-with st.sidebar.form("add_form"):
-    fund_sel = st.selectbox("Select Mutual Fund", fund_choices)
-    units = st.number_input("Units Bought", min_value=0.0001, step=0.01)
-    submit = st.form_submit_button("Add")
 
-if submit:
+with st.sidebar.form("add_form", clear_on_submit=True):
+    # Searchable dropdown
+    fund_sel = st.selectbox("Select Mutual Fund", fund_choices)
     fund_name = fund_sel.split(" (")[0]
     amfi_code = fund_sel.split(" (")[1].strip(")")
-    nav = fetch_nav(amfi_code)
-    if nav:
-        amt = round(nav * units, 2)
+
+    # Fetch NAV instantly when fund changes
+    latest_nav = fetch_nav(amfi_code)
+    if latest_nav:
+        st.write(f"📌 Latest NAV: ₹{latest_nav}")
+    else:
+        st.warning("⚠️ Could not fetch NAV. Check internet connection.")
+
+    # Units and Auto Calculation
+    units = st.number_input("Units Bought", min_value=0.0001, step=0.01)
+    invested_amt = (units * latest_nav) if latest_nav else 0
+    st.write(f"💰 Estimated Investment Amount: ₹{invested_amt:,.2f}")
+
+    # Date & Type
+    buy_date = st.date_input("Purchase Date", datetime.today())
+    inv_type = st.selectbox("Investment Type", ["Lump Sum", "SIP"])
+
+    submit = st.form_submit_button("➕ Add to Portfolio")
+
+if submit:
+    if latest_nav and units > 0:
         new_entry = {
-            "Date": datetime.today().strftime("%Y-%m-%d"),
+            "Date": buy_date.strftime("%Y-%m-%d"),
             "Fund": fund_name,
             "AMFI Code": amfi_code,
             "Units": round(units, 4),
-            "NAV": nav,
-            "Amount": amt
+            "NAV": latest_nav,
+            "Amount": round(invested_amt, 2),
+            "Type": inv_type
         }
         df = load_portfolio()
         df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
         save_portfolio(df)
-        st.success(f"✅ Added {units:.4f} units of {fund_name} @ ₹{nav}")
+        st.success(f"✅ Added {units:.4f} units of {fund_name} @ ₹{latest_nav} ({inv_type})")
         st.experimental_rerun()
     else:
-        st.error("❌ Couldn't fetch NAV for selected fund.")
+        st.error("❌ Please enter valid Units & ensure NAV is fetched.")
 
 # -------------------- Show Portfolio --------------------
 df = load_portfolio()
