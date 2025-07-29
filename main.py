@@ -6,47 +6,54 @@ from datetime import datetime
 import plotly.express as px
 import os
 
+# -------------------- SETTINGS --------------------
 st.set_page_config(page_title="📊 MF Portfolio", layout="wide")
-
 CSV_FILE = "portfolio.csv"
 
-st.title("Mutual Fund Portfolio Tracker")
-# ---------------- Fetch AMFI Fund List ----------------
+st.title("📊 Mutual Fund Portfolio Tracker")
+
+# -------------------- Fetch AMFI Fund List --------------------
 @st.cache_data(ttl=86400)
 def get_all_funds():
+    """Fetch all mutual funds from AMFI website"""
     url = "https://www.amfiindia.com/spages/NAVAll.txt"
-    r = requests.get(url)
-    fund_list = []
-    for line in r.text.splitlines():
-        if ";" in line and line[0].isdigit():
-            parts = line.split(";")
-            code, name = parts[0], parts[3]
-            if code and name:
-                fund_list.append((f"{name} ({code})", code))
-    return sorted(fund_list)
+    try:
+        r = requests.get(url, timeout=10)
+        fund_list = []
+        for line in r.text.splitlines():
+            if ";" in line and line[0].isdigit():
+                parts = line.split(";")
+                code, name = parts[0], parts[3]
+                if code and name:
+                    fund_list.append((f"{name} ({code})", code))
+        return sorted(fund_list)
+    except:
+        return []
 
 fund_choices = get_all_funds()
+if not fund_choices:
+    st.error("⚠️ Could not fetch fund list from AMFI. Please check your internet connection.")
 
-# ---------------- Fetch Latest NAV ----------------
+# -------------------- Fetch Latest NAV --------------------
 @st.cache_data(ttl=3600)
 def fetch_nav(code):
+    """Fetch latest NAV from mfapi.in"""
     try:
-        res = requests.get(f"https://api.mfapi.in/mf/{code}").json()
+        res = requests.get(f"https://api.mfapi.in/mf/{code}", timeout=10).json()
         return float(res["data"][0]["nav"].replace(",", ""))
     except:
         return None
 
-# ---------------- Load Portfolio ----------------
+# -------------------- Load & Save Portfolio --------------------
 def load_portfolio():
     if os.path.exists(CSV_FILE):
         return pd.read_csv(CSV_FILE)
     return pd.DataFrame(columns=["Date", "Fund", "AMFI Code", "Units", "NAV", "Amount"])
 
-# ---------------- Save Portfolio ----------------
 def save_portfolio(df):
     df.to_csv(CSV_FILE, index=False)
 
-# ---------------- Add Investment ----------------
+# -------------------- Add Investment --------------------
 st.sidebar.header("➕ Add Investment")
 with st.sidebar.form("add_form"):
     fund_sel = st.selectbox("Select Mutual Fund", fund_choices)
@@ -75,7 +82,7 @@ if submit:
     else:
         st.error("❌ Couldn't fetch NAV for selected fund.")
 
-# ---------------- Show Portfolio ----------------
+# -------------------- Show Portfolio --------------------
 df = load_portfolio()
 
 if not df.empty:
@@ -86,19 +93,16 @@ if not df.empty:
     st.subheader("📋 Portfolio Table")
     st.dataframe(df, use_container_width=True)
 
-    # 🗑️ Delete
+    # ---------------- Delete Entry ----------------
     st.subheader("🗑️ Remove an Entry")
-    for i, row in df.iterrows():
-        col1, col2 = st.columns([6, 1])
-        with col1:
-            st.write(f"{row['Date']} | {row['Fund']} | Units: {row['Units']} | ₹{row['Amount']}")
-        with col2:
-            if st.button("Delete", key=f"del_{i}"):
-                df = df.drop(index=i).reset_index(drop=True)
-                save_portfolio(df)
-                st.experimental_rerun()
+    remove_index = st.selectbox("Select Entry to Delete", options=df.index, format_func=lambda x: f"{df.iloc[x]['Fund']} ({df.iloc[x]['Units']} units)")
+    if st.button("Delete Selected Entry"):
+        df = df.drop(index=remove_index).reset_index(drop=True)
+        save_portfolio(df)
+        st.success("✅ Entry removed")
+        st.experimental_rerun()
 
-    # 📈 Summary
+    # ---------------- Portfolio Summary ----------------
     st.subheader("📈 Summary")
     total_amt = df["Amount"].sum()
     total_val = df["Current Value"].sum()
@@ -111,17 +115,16 @@ if not df.empty:
     else:
         col3.metric("Net Gain/Loss", "₹0.00")
 
-    # 🥧 Allocation Pie
+    # ---------------- Charts ----------------
     st.subheader("🥧 Allocation by Fund")
     pie = px.pie(df, names="Fund", values="Current Value", title="Fund Allocation")
     st.plotly_chart(pie, use_container_width=True)
 
-    # 📊 Bar Chart - P/L
     st.subheader("📊 Profit / Loss by Fund")
     bar = px.bar(df, x="Fund", y="Gain/Loss", color="Gain/Loss", text="Gain/Loss")
     st.plotly_chart(bar, use_container_width=True)
 
-# ---------------- Nifty Dip Strategy ----------------
+# -------------------- Nifty Dip Strategy --------------------
 st.subheader("📉 Nifty 50 Dip Strategy")
 try:
     nifty = yf.Ticker("^NSEI").history(period="60d")['Close']
